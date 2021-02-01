@@ -9,6 +9,7 @@ import time
 from .Constant import *
 from pathlib import Path
 import logging
+import random
 
 logging.basicConfig()
 
@@ -49,36 +50,39 @@ class YouTubeUploader:
             self.__quit()
             raise
 
+    def _wait(self):
+        time.sleep(Constant.USER_WAITING_TIME + random.uniform(0, 2))
+
     def __login(self):
         self.browser.get(Constant.YOUTUBE_URL)
-        time.sleep(Constant.USER_WAITING_TIME)
+        self._wait()
 
         if self.browser.has_cookies_for_current_website():
             self.browser.load_cookies()
-            time.sleep(Constant.USER_WAITING_TIME)
+            self._wait()
             self.browser.refresh()
         else:
             self.logger.info('Please sign in and then press enter')
             input()
             self.browser.get(Constant.YOUTUBE_URL)
-            time.sleep(Constant.USER_WAITING_TIME)
+            self._wait()
             self.browser.save_cookies()
 
     def __upload(self) -> (bool, Optional[str]):
         self.browser.get(Constant.YOUTUBE_URL)
-        time.sleep(Constant.USER_WAITING_TIME)
+        self._wait()
         self.browser.get(Constant.YOUTUBE_UPLOAD_URL)
-        time.sleep(Constant.USER_WAITING_TIME)
+        self._wait()
         absolute_video_path = str(Path.cwd() / self.video_path)
         self.browser.find(By.XPATH, Constant.INPUT_FILE_VIDEO).send_keys(absolute_video_path)
         self.logger.debug('Attached video {}'.format(self.video_path))
         title_field = self.browser.find(By.ID, Constant.TEXTBOX, timeout=10)
         title_field.click()
-        time.sleep(Constant.USER_WAITING_TIME)
+        self._wait()
         title_field.clear()
-        time.sleep(Constant.USER_WAITING_TIME)
+        self._wait()
         title_field.send_keys(Keys.COMMAND + 'a')
-        time.sleep(Constant.USER_WAITING_TIME)
+        self._wait()
         title_field.send_keys(self.metadata_dict[Constant.VIDEO_TITLE])
         self.logger.debug('The video title was set to \"{}\"'.format(self.metadata_dict[Constant.VIDEO_TITLE]))
 
@@ -88,9 +92,9 @@ class YouTubeUploader:
                                                       Constant.DESCRIPTION_CONTAINER)
             description_field = self.browser.find(By.ID, Constant.TEXTBOX, element=description_container)
             description_field.click()
-            time.sleep(Constant.USER_WAITING_TIME)
+            self._wait()
             description_field.clear()
-            time.sleep(Constant.USER_WAITING_TIME)
+            self._wait()
             description_field.send_keys(self.metadata_dict[Constant.VIDEO_DESCRIPTION])
             self.logger.debug(
                 'The video description was set to \"{}\"'.format(self.metadata_dict[Constant.VIDEO_DESCRIPTION]))
@@ -116,7 +120,7 @@ class YouTubeUploader:
         while True:
             in_process = status_container.text.find(Constant.UPLOADED) != -1
             if in_process:
-                time.sleep(Constant.USER_WAITING_TIME)
+                self._wait()
             else:
                 break
 
@@ -132,7 +136,7 @@ class YouTubeUploader:
 
         done_button.click()
         self.logger.debug("Published the video with video_id = {}".format(video_id))
-        time.sleep(Constant.USER_WAITING_TIME)
+        self._wait()
         self.browser.get(Constant.YOUTUBE_URL)
         self.__quit()
         return True, video_id

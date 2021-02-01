@@ -3,7 +3,7 @@ class Constant:
     YOUTUBE_URL = 'https://www.youtube.com'
     YOUTUBE_STUDIO_URL = 'https://studio.youtube.com'
     YOUTUBE_UPLOAD_URL = 'https://www.youtube.com/upload'
-    USER_WAITING_TIME = 1
+    USER_WAITING_TIME = 2
     VIDEO_TITLE = 'title'
     VIDEO_DESCRIPTION = 'description'
     DESCRIPTION_CONTAINER = '/html/body/ytcp-uploads-dialog/paper-dialog/div/ytcp-animatable[1]/' \
