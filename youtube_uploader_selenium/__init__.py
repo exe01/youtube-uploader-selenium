@@ -6,7 +6,7 @@ from selenium_firefox.firefox import Firefox, By, Keys
 from collections import defaultdict
 import json
 import time
-from .Constant import *
+from youtube_uploader_selenium import const
 from pathlib import Path
 import logging
 import random
@@ -31,30 +31,30 @@ class YouTubeUploader:
         self.browser = browser
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.DEBUG)
-        self.__validate_inputs()
+        self._validate_inputs()
 
-    def __validate_inputs(self):
-        if not self.metadata_dict[Constant.VIDEO_TITLE]:
+    def _validate_inputs(self):
+        if not self.metadata_dict[const.VIDEO_TITLE]:
             self.logger.warning("The video title was not found in a metadata file")
-            self.metadata_dict[Constant.VIDEO_TITLE] = Path(self.video_path).stem
+            self.metadata_dict[const.VIDEO_TITLE] = Path(self.video_path).stem
             self.logger.warning("The video title was set to {}".format(Path(self.video_path).stem))
-        if not self.metadata_dict[Constant.VIDEO_DESCRIPTION]:
+        if not self.metadata_dict[const.VIDEO_DESCRIPTION]:
             self.logger.warning("The video description was not found in a metadata file")
 
     def upload(self):
         try:
-            self.__login()
-            return self.__upload()
+            self._login()
+            return self._upload()
         except Exception as e:
             print(e)
-            self.__quit()
+            self._quit()
             raise
 
     def _wait(self):
-        time.sleep(Constant.USER_WAITING_TIME + random.uniform(0, 2))
+        time.sleep(const.USER_WAITING_TIME + random.uniform(0, 2))
 
-    def __login(self):
-        self.browser.get(Constant.YOUTUBE_URL)
+    def _login(self):
+        self.browser.get(const.YOUTUBE_URL)
         self._wait()
 
         if self.browser.has_cookies_for_current_website():
@@ -64,94 +64,133 @@ class YouTubeUploader:
         else:
             self.logger.info('Please sign in and then press enter')
             input()
-            self.browser.get(Constant.YOUTUBE_URL)
+            self.browser.get(const.YOUTUBE_URL)
             self._wait()
             self.browser.save_cookies()
 
-    def __upload(self) -> (bool, Optional[str]):
-        self.browser.get(Constant.YOUTUBE_URL)
+    def _upload(self) -> (bool, Optional[str]):
+        self._go_to_upload()
+        self._send_video()
+        self._set_title()
+        self._set_description()
+        self._set_kids_section()
+
+        self._set_tags()
+
+        self._click_next()
+        self._click_next()
+
+        self._set_video_public()
+
+        video_id = self._get_video_id()
+
+        self._wait_while_upload()
+
+        done_button = self.browser.find(By.ID, const.DONE_BUTTON)
+
+        # Catch such error as
+        # "File is a duplicate of a video you have already uploaded"
+        if done_button.get_attribute('aria-disabled') == 'true':
+            error_message = self.browser.find(By.XPATH,
+                                              const.ERROR_CONTAINER).text
+            self.logger.error(error_message)
+            return False, None
+
+        done_button.click()
+
+        self.logger.debug("Published the video with video_id = {}".format(video_id))
         self._wait()
-        self.browser.get(Constant.YOUTUBE_UPLOAD_URL)
+        self.browser.get(const.YOUTUBE_URL)
+        self._quit()
+        return True, video_id
+
+    def _go_to_upload(self):
+        self.browser.get(const.YOUTUBE_URL)
         self._wait()
+        self.browser.get(const.YOUTUBE_UPLOAD_URL)
+        self._wait()
+
+    def _send_video(self):
         absolute_video_path = str(Path.cwd() / self.video_path)
-        self.browser.find(By.XPATH, Constant.INPUT_FILE_VIDEO).send_keys(absolute_video_path)
+        self.browser.find(By.XPATH, const.INPUT_FILE_VIDEO).send_keys(absolute_video_path)
         self.logger.debug('Attached video {}'.format(self.video_path))
-        title_field = self.browser.find(By.ID, Constant.TEXTBOX, timeout=10)
+
+    def _set_title(self):
+        title_field = self.browser.find(By.ID, const.TEXTBOX, timeout=10)
         title_field.click()
         self._wait()
         title_field.clear()
         self._wait()
         title_field.send_keys(Keys.COMMAND + 'a')
         self._wait()
-        title_field.send_keys(self.metadata_dict[Constant.VIDEO_TITLE])
-        self.logger.debug('The video title was set to \"{}\"'.format(self.metadata_dict[Constant.VIDEO_TITLE]))
+        title_field.send_keys(self.metadata_dict[const.VIDEO_TITLE])
+        self.logger.debug('The video title was set to \"{}\"'.format(self.metadata_dict[const.VIDEO_TITLE]))
+        self._wait()
 
-        video_description = self.metadata_dict[Constant.VIDEO_DESCRIPTION]
+    def _set_description(self):
+        video_description = self.metadata_dict[const.VIDEO_DESCRIPTION]
         if video_description:
             description_container = self.browser.find(By.XPATH,
-                                                      Constant.DESCRIPTION_CONTAINER)
-            description_field = self.browser.find(By.ID, Constant.TEXTBOX, element=description_container)
+                                                      const.DESCRIPTION_CONTAINER)
+            description_field = self.browser.find(By.ID, const.TEXTBOX, element=description_container)
             description_field.click()
             self._wait()
             description_field.clear()
             self._wait()
-            description_field.send_keys(self.metadata_dict[Constant.VIDEO_DESCRIPTION])
+            description_field.send_keys(self.metadata_dict[const.VIDEO_DESCRIPTION])
             self.logger.debug(
-                'The video description was set to \"{}\"'.format(self.metadata_dict[Constant.VIDEO_DESCRIPTION]))
+                'The video description was set to \"{}\"'.format(self.metadata_dict[const.VIDEO_DESCRIPTION]))
 
-        kids_section = self.browser.find(By.NAME, Constant.NOT_MADE_FOR_KIDS_LABEL)
-        self.browser.find(By.ID, Constant.RADIO_LABEL, kids_section).click()
-        self.logger.debug('Selected \"{}\"'.format(Constant.NOT_MADE_FOR_KIDS_LABEL))
+    def _set_kids_section(self):
+        kids_section = self.browser.find(By.NAME, const.NOT_MADE_FOR_KIDS_LABEL)
+        self.browser.find(By.ID, const.RADIO_LABEL, kids_section).click()
+        self.logger.debug('Selected \"{}\"'.format(const.NOT_MADE_FOR_KIDS_LABEL))
 
-        self.browser.find(By.ID, Constant.NEXT_BUTTON).click()
-        self.logger.debug('Clicked {}'.format(Constant.NEXT_BUTTON))
+    def _set_tags(self):
+        more_options = self.browser.find(By.CLASS_NAME, const.ADVANCED_BUTTON)
+        more_options.click()
+        self._wait()
+        self._wait()
 
-        self.browser.find(By.ID, Constant.NEXT_BUTTON).click()
-        self.logger.debug('Clicked another {}'.format(Constant.NEXT_BUTTON))
+        tags_container = self.browser.find(By.ID, const.TAGS_CONTAINER)
+        tags_container.click()
+        tags_input = tags_container.find_element(By.ID, const.TEXT_INPUT)
+        tags_input.click()
+        self._wait()
+        tags_input.send_keys(self.metadata_dict[const.VIDEO_TAGS])
+        self._wait()
 
-        public_main_button = self.browser.find(By.NAME, Constant.PUBLIC_BUTTON)
-        self.browser.find(By.ID, Constant.RADIO_LABEL, public_main_button).click()
-        self.logger.debug('Made the video {}'.format(Constant.PUBLIC_BUTTON))
+    def _click_next(self):
+        self.browser.find(By.ID, const.NEXT_BUTTON).click()
+        self.logger.debug('Clicked {}'.format(const.NEXT_BUTTON))
+        self._wait()
 
-        video_id = self.__get_video_id()
+    def _set_video_public(self):
+        public_main_button = self.browser.find(By.NAME, const.PUBLIC_BUTTON)
+        self.browser.find(By.ID, const.RADIO_LABEL, public_main_button).click()
+        self.logger.debug('Made the video {}'.format(const.PUBLIC_BUTTON))
 
+    def _wait_while_upload(self):
         status_container = self.browser.find(By.XPATH,
-                                             Constant.STATUS_CONTAINER)
+                                             const.STATUS_CONTAINER)
         while True:
-            in_process = status_container.text.find(Constant.UPLOADED) != -1
+            in_process = status_container.text.find(const.UPLOADED) != -1
             if in_process:
                 self._wait()
             else:
                 break
 
-        done_button = self.browser.find(By.ID, Constant.DONE_BUTTON)
-
-        # Catch such error as
-        # "File is a duplicate of a video you have already uploaded"
-        if done_button.get_attribute('aria-disabled') == 'true':
-            error_message = self.browser.find(By.XPATH,
-                                              Constant.ERROR_CONTAINER).text
-            self.logger.error(error_message)
-            return False, None
-
-        done_button.click()
-        self.logger.debug("Published the video with video_id = {}".format(video_id))
-        self._wait()
-        self.browser.get(Constant.YOUTUBE_URL)
-        self.__quit()
-        return True, video_id
-
-    def __get_video_id(self) -> Optional[str]:
+    def _get_video_id(self) -> Optional[str]:
         video_id = None
         try:
-            video_url_container = self.browser.find(By.XPATH, Constant.VIDEO_URL_CONTAINER)
-            video_url_element = self.browser.find(By.XPATH, Constant.VIDEO_URL_ELEMENT,
+            video_url_container = self.browser.find(By.XPATH, const.VIDEO_URL_CONTAINER)
+            video_url_element = self.browser.find(By.XPATH, const.VIDEO_URL_ELEMENT,
                                                   element=video_url_container)
-            video_id = video_url_element.get_attribute(Constant.HREF).split('/')[-1]
+            video_id = video_url_element.get_attribute(const.HREF).split('/')[-1]
         except:
-            self.logger.warning(Constant.VIDEO_NOT_FOUND_ERROR)
+            self.logger.warning(const.VIDEO_NOT_FOUND_ERROR)
             pass
         return video_id
 
-    def __quit(self):
+    def _quit(self):
         self.browser.driver.quit()
